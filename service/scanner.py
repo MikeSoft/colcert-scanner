@@ -1172,10 +1172,12 @@ def scan(scanner_db: ScannerExecution, domain: str, template: str) -> None:
         raise RuntimeError("No fue posible analizar ningún dominio.")
 
     context = build_context(result)
-
+    
+    output_dir = Path("./outputs")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     filename = f"report_{clean_domain(domain).replace('.', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-
-    output_file = Path(f"./outputs/{filename}")
+    output_file = output_dir / filename
 
     render_docx(template_path, output_file, context)
     print(f"✅ Informe generado: {output_file.resolve()}")
