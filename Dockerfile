@@ -5,11 +5,23 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Instalar dependencias del sistema (psycopg2 necesita esto)
+# Instalar dependencias del sistema + Go
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
+    git \
+    wget \
+    ca-certificates \
+    golang-go \
     && apt-get clean
+
+# Configurar PATH para Go
+ENV PATH="/root/go/bin:${PATH}"
+
+# Instalar subfinder
+RUN go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+
+RUN subfinder -h
 
 # Crear directorio de trabajo
 WORKDIR /app
@@ -17,7 +29,7 @@ WORKDIR /app
 # Copiar requirements primero (mejor cache)
 COPY requirements.txt .
 
-# Instalar dependencias
+# Instalar dependencias Python
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar el código

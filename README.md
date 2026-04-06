@@ -52,6 +52,6 @@ curl --location '127.0.0.1:8000/scan/9'
 
 ```
 docker build -t colcert-scanner .
-
+docker rm -f colcert-scanner
 docker run --name colcert-scanner -d -p 8000:8000 --env-file .env colcert-scanner
 ```
