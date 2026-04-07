@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import dns.resolver
 import requests
 from docxtpl import DocxTemplate
+from docx import Document
 
 from databases.scanner_database import ScannerExecution
 from s3.upload_report import UploadReport
@@ -181,6 +182,7 @@ def run_command(cmd: List[str], timeout: int = 90) -> str:
 def enumerate_crtsh(domain: str, session: requests.Session) -> Set[str]:
     found = set()
     url = f"https://crt.sh/?q=%25.{domain}&output=json"
+    print("    [-] Buscando crt...")
     try:
         r = session.get(url, timeout=20)
         r.raise_for_status()
@@ -198,6 +200,7 @@ def enumerate_amass(domain: str) -> Set[str]:
     found = set()
     if not command_exists("amass"):
         return found
+    print("    [-] Buscando amass...")
     output = run_command(["amass", "enum", "-passive", "-d", domain], timeout=180)
     for line in output.splitlines():
         line = clean_domain(line)
@@ -209,6 +212,7 @@ def enumerate_subfinder(domain: str) -> Set[str]:
     found = set()
     if not command_exists("subfinder"):
         return found
+    print("    [-] Buscando subfinder...")
     output = run_command(["subfinder", "-silent", "-d", domain], timeout=120)
     for line in output.splitlines():
         line = clean_domain(line)
@@ -220,6 +224,7 @@ def enumerate_assetfinder(domain: str) -> Set[str]:
     found = set()
     if not command_exists("assetfinder"):
         return found
+    print("    [-] Buscando assentfinder...")
     output = run_command(["assetfinder", "--subs-only", domain], timeout=120)
     for line in output.splitlines():
         line = clean_domain(line)
@@ -230,9 +235,14 @@ def enumerate_assetfinder(domain: str) -> Set[str]:
 def enumerate_all_subdomains(domain: str, session: requests.Session) -> List[str]:
     found = {domain}
     found.update(enumerate_crtsh(domain, session))
+    print(f"    [-] {len(found)} subdomains found")
     found.update(enumerate_amass(domain))
+    print(f"    [-] {len(found)} subdomains found")
     found.update(enumerate_subfinder(domain))
+    print(f"    [-] {len(found)} subdomains found")
     found.update(enumerate_assetfinder(domain))
+
+    print(f"    [-] Subdominios encontrados: {len(found)}")
     return sorted(found)
 
 # =========================================================
@@ -384,7 +394,7 @@ def evaluate_dkim(domain: str) -> Dict[str, str]:
     if not found:
         return {
             "selector": "No identificado",
-            "consulta": f"TXT <selector>._domainkey.{domain}",
+            "consulta": f"TXT selector._domainkey.{domain}",
             "resultado": "No se identificó DKIM con selectores comunes",
             "evaluacion": "La ausencia con selectores comunes no confirma ausencia total de DKIM.",
             "recomendacion": "Validar selectores DKIM reales de la plataforma de correo.",
@@ -788,7 +798,6 @@ def evidence_entry(
 def analyze_domain(domain: str, session: requests.Session) -> Dict[str, Any]:
     print(f"[+] Analizando: {domain}")
     subdomains = enumerate_all_subdomains(domain, session)
-    print(f"    [-] Subdominios encontrados: {len(subdomains)}")
 
     inventario = []
     huerfanos = []
@@ -1079,17 +1088,6 @@ def build_context(result: Dict[str, Any]) -> Dict[str, Any]:
         "vulnerabilidades_bajas": vulns_baj,
         "activos_criticos": activos_crit,
 
-        "total_cves_detectadas": total_cves_detectadas,
-        "cves_criticas": cves_criticas,
-        "cves_altas": cves_altas,
-        "cves_medias": cves_medias,
-        "cves_bajas": cves_bajas,
-
-        "activos": all_inventario,
-        "subdominios_huerfanos_lista": [x["subdominio"] for x in all_huerfanos],
-        "subdominios_huerfanos_detalle": all_huerfanos,
-        "huerfanos": all_huerfanos,
-
         "spf_consulta": result["spf"]["consulta"] if result else "",
         "spf_resultado": result["spf"]["resultado"] if result else "",
         "spf_evaluacion": result["spf"]["evaluacion"] if result else "",
@@ -1105,6 +1103,17 @@ def build_context(result: Dict[str, Any]) -> Dict[str, Any]:
         "dmarc_resultado": result["dmarc"]["resultado"] if result else "",
         "dmarc_evaluacion": result["dmarc"]["evaluacion"] if result else "",
         "dmarc_recomendacion": result["dmarc"]["recomendacion"] if result else "",
+
+        "total_cves_detectadas": total_cves_detectadas,
+        "cves_criticas": cves_criticas,
+        "cves_altas": cves_altas,
+        "cves_medias": cves_medias,
+        "cves_bajas": cves_bajas,
+
+        "activos": all_inventario,
+        "subdominios_huerfanos_lista": [x["subdominio"] for x in all_huerfanos],
+        "subdominios_huerfanos_detalle": all_huerfanos,
+        "huerfanos": all_huerfanos,
 
         "tls_estado": "Validación básica completada",
         "tls_versiones": "La verificación exhaustiva de protocolos y cifrados requiere validación especializada adicional.",
@@ -1148,11 +1157,19 @@ def build_context(result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 def render_docx(template_path: Path, output_path: Path, context: Dict[str, Any]) -> None:
+    print(f"✏️  Writing and Saving document")
     if not template_path.exists():
         raise FileNotFoundError(f"No existe la plantilla Word: {template_path}")
-    doc = DocxTemplate(str(template_path))
-    doc.render(context)
-    doc.save(str(output_path))
+    
+    try:
+        doc = DocxTemplate(str(template_path))
+        doc.render(context)
+        doc.save(str(output_path))
+        print(f"✏️  Refine doc")
+        doc_r = Document(template_path)
+        doc_r.save(template_path)
+    except Exception as e:
+        raise RuntimeError(f"Error generando DOCX: {e}")
 
 
 def scan(scanner_db: ScannerExecution, domain: str, template: str) -> None:

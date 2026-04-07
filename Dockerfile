@@ -20,8 +20,15 @@ ENV PATH="/root/go/bin:${PATH}"
 
 # Instalar subfinder
 RUN go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-
 RUN subfinder -h
+
+# Instal amass
+RUN go install -v github.com/owasp-amass/amass/v4/...@master
+RUN amass -h
+
+# Install assetfinder
+RUN go install github.com/tomnomnom/assetfinder@latest
+RUN assetfinder -h
 
 # Crear directorio de trabajo
 WORKDIR /app
